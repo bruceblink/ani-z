@@ -16,10 +16,18 @@ pub fn main() !void {
     }
 
     var router = try server.router(.{});
+    router.get("/", index, .{});
     router.get("/api/user/:id", getUser, .{});
     std.debug.print("server listening: http://localhost:{?}\n", .{ server.config.port });
     // blocks
     try server.listen();
+}
+
+fn index(_: *httpz.Request, res: *httpz.Response) !void {
+    res.body =
+    \\<!DOCTYPE html>
+    \\ <h1>Hello this ani-z</h1>
+    ;
 }
 
 fn getUser(req: *httpz.Request, res: *httpz.Response) !void {
