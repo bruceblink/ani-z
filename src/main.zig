@@ -4,6 +4,7 @@ const pg = @import("pg");
 
 const App = struct {
     db: *pg.Pool,
+    allocator: std.mem.Allocator,
 };
 
 pub fn main() !void {
@@ -16,6 +17,7 @@ pub fn main() !void {
 
     var app = App {
         .db = db,
+        .allocator = allocator,
     };
     // More advance cases will use a custom "Handler" instead of "void".
     // The last parameter is our handler instance, since we have a "void"
@@ -30,6 +32,7 @@ pub fn main() !void {
     var router = try server.router(.{});
     router.get("/", index, .{});
     router.get("/api/anis/:id", getAniInfo, .{});
+    router.get("/api/anis", getAniInfoList, .{});
 
 
     std.debug.print("server listening: http://localhost:{?}\n", .{ server.config.port });
@@ -78,4 +81,38 @@ fn getAniInfo(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
         .detailUrl = row.get([]u8, 1),
         .platform = row.get([]u8, 2),
     }, .{});
+}
+
+const AniInfo = struct {
+    id: i64,
+    title: []const u8,
+    detailUrl: []const u8,
+    platform: []const u8,
+};
+
+fn getAniInfoList(app: *App, _: *httpz.Request, res: *httpz.Response) !void {
+    res.status = 200;
+
+    var result = try app.db.query(
+        "select id, title, detail_url, platform from ani_info limit 10",
+        .{},
+    );
+    defer result.deinit() ;
+
+    // 用 ArrayList 动态收集 AniInfo
+    var list = std.ArrayList(AniInfo).init(app.allocator);
+    defer list.deinit();
+
+    while (try result.next()) |row| {
+        // 这里编译器会 自动推断类型是AniInfo，所以不需要显式定义一个AniInfo struct
+        try list.append(.{
+            .id = row.get(i64, 0),        // 用 u64 对应 id
+            .title = row.get([]u8, 1),
+            .detailUrl = row.get([]u8, 2),
+            .platform = row.get([]u8, 3),
+        });
+    }
+
+    // 输出 JSON 数组
+    try res.json(list.items, .{});
 }
