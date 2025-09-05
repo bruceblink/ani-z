@@ -17,7 +17,7 @@ pub fn main() !void {
 
     var router = try server.router(.{});
     router.get("/api/user/:id", getUser, .{});
-
+    std.debug.print("server listening: http://localhost:{?}\n", .{ server.config.port });
     // blocks
     try server.listen();
 }
