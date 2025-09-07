@@ -32,7 +32,7 @@ pub fn main() !void {
     var router = try server.router(.{});
     router.get("/", index, .{});
     router.get("/api/anis/:id", getAniInfo, .{});
-    router.get("/api/anis", getAniInfoList, .{});
+    router.post("/api/anis", getAniInfoList, .{});
 
 
     std.debug.print("server listening: http://localhost:{?}\n", .{ server.config.port });
@@ -90,29 +90,67 @@ const AniInfo = struct {
     platform: []const u8,
 };
 
-fn getAniInfoList(app: *App, _: *httpz.Request, res: *httpz.Response) !void {
+const PageParam = struct {
+    page: i64 = 1,          // 当前页码（1开始）
+    page_size: i64 = 10,    // 每页数量
+};
+
+fn PageData(comptime T: type) type {
+    return struct {
+        items: []T,
+        total: i64,
+        page: i64,
+        page_size: i64,
+
+        const Self = @This();
+
+        pub fn init(items: []T, total: i64, page: i64, page_size: i64) Self {
+            return Self{
+                .items = items,
+                .total = total,
+                .page = page,
+                .page_size = page_size,
+            };
+        }
+    };
+}
+
+fn getAniInfoList(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     res.status = 200;
 
-    var result = try app.db.query(
-        "select id, title, detail_url, platform from ani_info limit 10",
-        .{},
-    );
-    defer result.deinit() ;
+    const param = if (try req.json(PageParam)) |p| p else PageParam{};
+    const offset = (param.page - 1) * param.page_size;
 
-    // 用 ArrayList 动态收集 AniInfo
+    var result = try app.db.query(
+        \\SELECT id, title, detail_url, platform, COUNT(*) OVER() AS total_count
+        \\FROM ani_info
+        \\ORDER BY id
+        \\LIMIT $1
+        \\OFFSET $2
+    , .{ param.page_size, offset });
+    defer result.deinit();
+
     var list = std.ArrayList(AniInfo).init(app.allocator);
     defer list.deinit();
 
-    while (try result.next()) |row| {
-        // 这里编译器会 自动推断类型是AniInfo，所以不需要显式定义一个AniInfo struct
-        try list.append(.{
-            .id = row.get(i64, 0),        // 用 u64 对应 id
-            .title = row.get([]u8, 1),
-            .detailUrl = row.get([]u8, 2),
-            .platform = row.get([]u8, 3),
-        });
-    }
+    var total_count: i64 = 0;
 
-    // 输出 JSON 数组
-    try res.json(list.items, .{});
+    while (try result.next()) |row| {
+        try list.append(.{
+            .id = row.get(i64, 0),
+            .title = row.get([]const u8, 1),
+            .detailUrl = row.get([]const u8, 2),
+            .platform = row.get([]const u8, 3),
+        });
+        total_count = row.get(i64, 4);
+    }
+    const AniPage = PageData(AniInfo);
+    const page_res = AniPage.init(
+        list.items,
+        total_count,
+        param.page,
+        param.page_size,
+    );
+
+    try res.json(page_res, .{});
 }
