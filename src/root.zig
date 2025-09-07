@@ -1,23 +1,39 @@
-//! By convention, root.zig is the root source file when making a library.
 const std = @import("std");
+const pg = @import("pg");
 
-pub fn bufferedPrint() !void {
-    // Stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    const stdout = &stdout_writer.interface;
+pub const App = struct {
+    db: *pg.Pool,
+    allocator: std.mem.Allocator,
+};
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+pub const AniInfo = struct {
+    id: i64,
+    title: []const u8,
+    detailUrl: []const u8,
+    platform: []const u8,
+};
 
-    try stdout.flush(); // Don't forget to flush!
-}
+pub const PageParam = struct {
+    page: i64 = 1,          // 当前页码（1开始）
+    page_size: i64 = 10,    // 每页数量
+};
 
-pub fn add(a: i32, b: i32) i32 {
-    return a + b;
-}
+pub fn PageData(comptime T: type) type {
+    return struct {
+        items: []T,
+        total: i64,
+        page: i64,
+        page_size: i64,
 
-test "basic add functionality" {
-    try std.testing.expect(add(3, 7) == 10);
+        const Self = @This();
+
+        pub fn init(items: []T, total: i64, page: i64, page_size: i64) Self {
+            return Self{
+                .items = items,
+                .total = total,
+                .page = page,
+                .page_size = page_size,
+            };
+        }
+    };
 }

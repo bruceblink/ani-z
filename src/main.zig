@@ -1,16 +1,13 @@
 const std = @import("std");
 const httpz = @import("httpz");
 const pg = @import("pg");
+const root = @import("root.zig");
+const App = root.App;
 
-const App = struct {
-    db: *pg.Pool,
-    allocator: std.mem.Allocator,
-};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-
     // 初始化数据库连接池
     var db = try init_db_pool(allocator);
     defer db.deinit();
@@ -83,42 +80,12 @@ fn getAniInfo(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     }, .{});
 }
 
-const AniInfo = struct {
-    id: i64,
-    title: []const u8,
-    detailUrl: []const u8,
-    platform: []const u8,
-};
 
-const PageParam = struct {
-    page: i64 = 1,          // 当前页码（1开始）
-    page_size: i64 = 10,    // 每页数量
-};
-
-fn PageData(comptime T: type) type {
-    return struct {
-        items: []T,
-        total: i64,
-        page: i64,
-        page_size: i64,
-
-        const Self = @This();
-
-        pub fn init(items: []T, total: i64, page: i64, page_size: i64) Self {
-            return Self{
-                .items = items,
-                .total = total,
-                .page = page,
-                .page_size = page_size,
-            };
-        }
-    };
-}
 
 fn getAniInfoList(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     res.status = 200;
 
-    const param = if (try req.json(PageParam)) |p| p else PageParam{};
+    const param = if (try req.json(root.PageParam)) |p| p else root.PageParam{};
     const offset = (param.page - 1) * param.page_size;
 
     var result = try app.db.query(
@@ -130,7 +97,7 @@ fn getAniInfoList(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     , .{ param.page_size, offset });
     defer result.deinit();
 
-    var list = std.ArrayList(AniInfo).init(app.allocator);
+    var list = std.ArrayList(root.AniInfo).init(app.allocator);
     defer list.deinit();
 
     var total_count: i64 = 0;
@@ -144,7 +111,7 @@ fn getAniInfoList(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
         });
         total_count = row.get(i64, 4);
     }
-    const AniPage = PageData(AniInfo);
+    const AniPage = root.PageData(root.AniInfo);
     const page_res = AniPage.init(
         list.items,
         total_count,
