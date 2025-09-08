@@ -40,13 +40,6 @@ pub const App = struct {
     }
 };
 
-pub const AniInfo = struct {
-    id: i64,
-    title: []const u8,
-    detailUrl: []const u8,
-    platform: []const u8,
-};
-
 pub const PageParam = struct {
     page: i64 = 1,          // 当前页码（1开始）
     page_size: i64 = 10,    // 每页数量
