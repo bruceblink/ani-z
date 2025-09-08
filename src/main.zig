@@ -26,7 +26,7 @@ pub fn main() !void {
     var router = try server.router(.{});
     router.get("/", handle.index, .{});
     router.get("/api/anis/:id", handle.getAniInfo, .{});
-    router.post("/api/anis", handle.getAniInfoList, .{});
+    router.get("/api/anis", handle.getAniInfoList, .{});
 
 
     std.debug.print("server listening: http://localhost:{?}\n", .{ server.config.port });

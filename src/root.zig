@@ -48,18 +48,20 @@ pub const PageParam = struct {
 pub fn PageData(comptime T: type) type {
     return struct {
         items: []T,
-        total: i64,
-        page: i64,
-        page_size: i64,
+        total_count: usize,
+        page: usize,
+        page_size: usize,
+        total_pages: usize,
 
         const Self = @This();
 
-        pub fn init(items: []T, total: i64, page: i64, page_size: i64) Self {
+        pub fn init(items: []T, total_count: usize, page: usize, page_size: usize) Self {
             return Self{
                 .items = items,
-                .total = total,
+                .total_count = total_count,
                 .page = page,
                 .page_size = page_size,
+                .total_pages = (total_count + page_size - 1) / page_size,  // 向上取整
             };
         }
     };

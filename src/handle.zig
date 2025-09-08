@@ -40,9 +40,15 @@ pub fn getAniInfo(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
 
 pub fn getAniInfoList(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     res.status = 200;
-
-    const param = if (try req.json(root.PageParam)) |p| p else root.PageParam{};
-    const offset = (param.page - 1) * param.page_size;
+    const query = try req.query();
+    // 解析出page字段
+    const page = if ( query.get("page")) |p|
+        try std.fmt.parseInt(i64, p, 10) else 1;
+    // 解析page_size字段
+    const page_size = if ( query.get("pageSize") ) |p|
+        try std.fmt.parseInt(i64, p, 10) else 10;
+    // 获取offset
+    const offset: i64 = (page - 1) * page_size;
 
     var result = try app.db_pool.query(
         \\SELECT id, title, detail_url, platform, COUNT(*) OVER() AS total_count
@@ -50,7 +56,7 @@ pub fn getAniInfoList(app: *App, req: *httpz.Request, res: *httpz.Response) !voi
         \\ORDER BY id
         \\LIMIT $1
         \\OFFSET $2
-    , .{ param.page_size, offset });
+    , .{ page_size, offset });
     defer result.deinit();
 
     var list = std.ArrayList(AniInfo).init(app.allocator);
@@ -70,9 +76,9 @@ pub fn getAniInfoList(app: *App, req: *httpz.Request, res: *httpz.Response) !voi
     const AniPage = root.PageData(AniInfo);
     const page_res = AniPage.init(
         list.items,
-        total_count,
-        param.page,
-        param.page_size,
+        @intCast(total_count), // 转换成usize
+        @intCast(page),
+        @intCast(page_size),
     );
 
     try res.json(page_res, .{});
