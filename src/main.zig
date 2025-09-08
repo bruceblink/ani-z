@@ -8,14 +8,10 @@ const App = root.App;
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    // 初始化数据库连接池
-    var db = try init_db_pool(allocator);
-    defer db.deinit();
+    // 初始化App应用上下文
+    var app = try App.init(allocator);
+    defer app.deinit();
 
-    var app = App {
-        .db = db,
-        .allocator = allocator,
-    };
     // More advance cases will use a custom "Handler" instead of "void".
     // The last parameter is our handler instance, since we have a "void"
     // handler, we passed a void ({}) value.
@@ -37,23 +33,6 @@ pub fn main() !void {
     try server.listen();
 }
 
-pub fn init_db_pool(allocator: std.mem.Allocator) !*pg.Pool {
-    return try pg.Pool.init(allocator, .{
-        .size = 5,
-        .connect = .{
-            .port = 5432,
-            .host = "127.0.0.1",
-        },
-        .auth = .{
-            .username = "postgres",
-            .database = "newsletter",
-            .password = "password",
-            .timeout = 10_000,
-        },
-    });
-}
-
-
 fn index(_: *App, _: *httpz.Request, res: *httpz.Response) !void {
     res.body =
     \\<!DOCTYPE html>
@@ -65,7 +44,7 @@ fn getAniInfo(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     res.status = 200;
     const ani_id = req.param("id").?;
 
-    var row = try app.db.row("select title, detail_url, platform from ani_info where id = $1", .{ani_id}) orelse {
+    var row = try app.db_pool.row("select title, detail_url, platform from ani_info where id = $1", .{ani_id}) orelse {
         res.status = 404;
         res.body = "Not found";
         return;
@@ -88,7 +67,7 @@ fn getAniInfoList(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     const param = if (try req.json(root.PageParam)) |p| p else root.PageParam{};
     const offset = (param.page - 1) * param.page_size;
 
-    var result = try app.db.query(
+    var result = try app.db_pool.query(
         \\SELECT id, title, detail_url, platform, COUNT(*) OVER() AS total_count
         \\FROM ani_info
         \\ORDER BY id
