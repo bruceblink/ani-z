@@ -40,6 +40,26 @@ pub const App = struct {
     }
 };
 
+test "test get env var" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+
+    const stdout = std.io.getStdOut().writer();
+
+    // 如果存在，返回环境变量字符串；如果不存在，返回 error
+    const value = std.process.getEnvVarOwned(allocator, "DATABASE_URL") catch |err| switch (err) {
+        error.EnvironmentVariableNotFound => {
+            try stdout.print("DATABASE_URL 未设置，使用默认值\n", .{});
+            return;
+        },
+        else => return err,
+    };
+    defer allocator.free(value);
+
+    try std.testing.expectEqualStrings("postgresql://postgres:password@localhost:5432/newsletter", value);
+}
+
 pub const PageParam = struct {
     page: i64 = 1,          // 当前页码（1开始）
     page_size: i64 = 10,    // 每页数量
